@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Scheduling Optimization</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Job Scheduling Optimization</h1>
+            <p>Maximize profit without overlapping tasks using Dynamic Programming</p>
+        </header>
+
+        <main class="content-grid">
+            <!-- Left Column: Input Form and Job List -->
+            <section class="panel input-section">
+                <h2>Add a Task</h2>
+                <form id="job-form">
+                    <div class="input-group">
+                        <label for="taskName">Task Name</label>
+                        <input type="text" id="taskName" placeholder="e.g., Task A" required autocomplete="off">
+                    </div>
+                    <div class="input-group">
+                        <label for="startTime">Start Time</label>
+                        <input type="number" id="startTime" placeholder="0" required min="0">
+                    </div>
+                    <div class="input-group">
+                        <label for="endTime">End Time</label>
+                        <input type="number" id="endTime" placeholder="5" required min="1">
+                    </div>
+                    <div class="input-group">
+                        <label for="profit">Profit / Value</label>
+                        <input type="number" id="profit" placeholder="50" required min="1">
+                    </div>
+                    <button type="submit" class="btn primary-btn">Add Task</button>
+                    <button type="button" id="load-sample-btn" class="btn outline-btn">Load Sample Data</button>
+                </form>
+
+                <div class="job-list-container">
+                    <h3>Current Tasks</h3>
+                    <div id="job-list" class="job-list">
+                        <!-- Jobs will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Column: Algorithms and Results -->
+            <section class="panel actions-section">
+                <h2>Solve Problem</h2>
+                <p>Select an algorithm to compute the optimal non-overlapping schedule:</p>
+                <div class="button-group">
+                    <button id="btn-bottom-up" class="btn solve-btn">Bottom-Up DP (Tabulation)</button>
+                    <button id="btn-top-down" class="btn solve-btn">Top-Down DP (Memoization)</button>
+                </div>
+
+                <div id="results-container" class="results-container hidden">
+                    <h3>Optimization Results</h3>
+                    
+                    <div class="metrics">
+                        <div class="metric-card">
+                            <span class="metric-title">Max Profit</span>
+                            <span class="metric-value" id="res-profit">0</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-title">Time Taken</span>
+                            <span class="metric-value" id="res-time">0 ms</span>
+                        </div>
+                    </div>
+
+                    <h4>Optimal Schedule</h4>
+                    <div id="optimal-schedule" class="optimal-schedule">
+                        <!-- Optimal jobs injected here -->
+                    </div>
+
+                    <div class="complexity-info">
+                        <h4>Complexity Analysis</h4>
+                        <p><strong>Algorithm:</strong> <span id="res-algo-name">-</span></p>
+                        <p><strong>Time Complexity:</strong> <span class="badge">O(n²)</span></p>
+                        <p class="complexity-desc">
+                            The algorithm sorts the jobs by end time (O(n log n)). For each job, it searches backwards sequentially to find the latest non-conflicting job, which takes O(n) in the worst case. This results in an overall time complexity of O(n²).
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
