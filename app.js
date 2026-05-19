@@ -1,36 +1,41 @@
 let jobs = [];
 let jobIdCounter = 1;
+let liveTimer = null;
 
-// DOM Elements
-const jobForm = document.getElementById('job-form');
-const jobList = document.getElementById('job-list');
-const optimalSchedule = document.getElementById('optimal-schedule');
-const resultsContainer = document.getElementById('results-container');
-const btnBottomUp = document.getElementById('btn-bottom-up');
-const btnTopDown = document.getElementById('btn-top-down');
+const jobForm = document.getElementById("job-form");
+const jobList = document.getElementById("job-list");
+const optimalSchedule = document.getElementById("optimal-schedule");
+const resultsContainer = document.getElementById("results-container");
+const btnBottomUp = document.getElementById("btn-bottom-up");
+const btnTopDown = document.getElementById("btn-top-down");
+const schedulerStatus = document.getElementById("scheduler-status");
+const lastOptimized = document.getElementById("last-optimized");
+const dependsOnSelect = document.getElementById("dependsOn");
 
-// Form Submit
-jobForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const name = document.getElementById('taskName').value;
-    const start = parseInt(document.getElementById('startTime').value);
-    const end = parseInt(document.getElementById('endTime').value);
-    const profit = parseInt(document.getElementById('profit').value);
+jobForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const name = document.getElementById("taskName").value.trim();
+    const start = Number.parseInt(document.getElementById("startTime").value, 10);
+    const end = Number.parseInt(document.getElementById("endTime").value, 10);
+    const profit = Number.parseInt(document.getElementById("profit").value, 10);
+    const dependsOn = dependsOnSelect.value;
 
     if (start >= end) {
         alert("End time must be greater than start time.");
         return;
     }
 
-    const job = { id: jobIdCounter++, name, start, end, profit };
-    jobs.push(job);
+    jobs.push({ id: jobIdCounter++, name, start, end, profit, dependsOn });
     renderJobs(jobs, jobList);
+    updateDependencyOptions();
     jobForm.reset();
-    document.getElementById('taskName').focus();
+    dependsOnSelect.value = "";
+    document.getElementById("taskName").focus();
+    queueLiveOptimization();
 });
 
-// Load Sample Data
-document.getElementById('load-sample-btn').addEventListener('click', () => {
+document.getElementById("load-sample-btn").addEventListener("click", () => {
     const sampleData = [
         { name: "Task A", start: 1, end: 4, profit: 50 },
         { name: "Task B", start: 3, end: 5, profit: 20 },
@@ -42,27 +47,42 @@ document.getElementById('load-sample-btn').addEventListener('click', () => {
         { name: "Task H", start: 8, end: 11, profit: 40 }
     ];
 
-    sampleData.forEach(d => {
-        jobs.push({ id: jobIdCounter++, name: d.name, start: d.start, end: d.end, profit: d.profit });
+    sampleData.forEach((item) => {
+        jobs.push({ id: jobIdCounter++, dependsOn: "", ...item });
     });
+
     renderJobs(jobs, jobList);
+    updateDependencyOptions();
+    queueLiveOptimization();
 });
 
-// Render Jobs
+document.getElementById("clear-btn").addEventListener("click", () => {
+    jobs = [];
+    renderJobs(jobs, jobList);
+    updateDependencyOptions();
+    renderJobs([], optimalSchedule);
+    resultsContainer.classList.add("hidden");
+    schedulerStatus.textContent = "Monitoring incoming tasks...";
+    lastOptimized.textContent = "Waiting for tasks";
+});
+
 function renderJobs(jobArray, container) {
-    container.innerHTML = '';
+    container.innerHTML = "";
+
     if (jobArray.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">No tasks added yet.</p>';
+        container.innerHTML = '<p class="empty-state">No tasks added yet.</p>';
         return;
     }
 
-    jobArray.forEach(job => {
-        const div = document.createElement('div');
-        div.className = 'job-item';
+    jobArray.forEach((job) => {
+        const div = document.createElement("div");
+        div.className = "job-item";
+        const dependencyText = getDependencyText(job);
         div.innerHTML = `
             <div class="job-info">
                 <span class="job-name">${job.name}</span>
                 <span class="job-details">Start: ${job.start} | End: ${job.end}</span>
+                <span class="dependency-tag">${dependencyText}</span>
             </div>
             <div class="job-profit">₹${job.profit}</div>
         `;
@@ -70,136 +90,128 @@ function renderJobs(jobArray, container) {
     });
 }
 
-// ----------------------------------------------------
-// ALGORITHM 1: Bottom-Up DP (Tabulation) - O(n^2)
-// ----------------------------------------------------
+function updateDependencyOptions() {
+    dependsOnSelect.innerHTML = '<option value="">No dependency</option>';
+
+    jobs.forEach((job) => {
+        const option = document.createElement("option");
+        option.value = String(job.id);
+        option.textContent = job.name;
+        dependsOnSelect.appendChild(option);
+    });
+}
+
+function getDependencyText(job) {
+    if (!job.dependsOn) return "No dependency";
+
+    const parentJob = jobs.find((item) => String(item.id) === String(job.dependsOn));
+    return parentJob ? `Depends on ${parentJob.name}` : "Dependency recorded";
+}
+
 function bottomUpDP(jobsArray) {
     if (jobsArray.length === 0) return { maxProfit: 0, sequence: [] };
-    
-    // Sort by end time
-    let arr = [...jobsArray].sort((a, b) => a.end - b.end);
-    let n = arr.length;
-    let dp = new Array(n).fill(0);
 
+    const arr = [...jobsArray].sort((a, b) => a.end - b.end);
+    const n = arr.length;
+    const dp = new Array(n).fill(0);
     dp[0] = arr[0].profit;
 
     for (let i = 1; i < n; i++) {
-        let inclProf = arr[i].profit;
-        let l = -1;
-        // O(n) search for latest non-conflicting job -> total O(n^2)
-        for (let j = i - 1; j >= 0; j--) {
-            if (arr[j].end <= arr[i].start) {
-                l = j;
-                break;
-            }
-        }
-        
-        if (l !== -1) {
-            inclProf += dp[l];
-        }
-        
-        dp[i] = Math.max(inclProf, dp[i - 1]);
+        let includeProfit = arr[i].profit;
+        const latest = findLatestNonConflict(arr, i);
+
+        if (latest !== -1) includeProfit += dp[latest];
+        dp[i] = Math.max(includeProfit, dp[i - 1]);
     }
 
-    // Reconstruct sequence
-    let result = [];
+    const result = [];
     let i = n - 1;
+
     while (i >= 0) {
         if (i === 0) {
             if (dp[0] > 0) result.push(arr[0]);
             break;
         }
-        
-        let l = -1;
-        for (let j = i - 1; j >= 0; j--) {
-            if (arr[j].end <= arr[i].start) {
-                l = j;
-                break;
-            }
-        }
-        
-        let inclProf = arr[i].profit + (l !== -1 ? dp[l] : 0);
-        if (inclProf === dp[i]) {
+
+        const latest = findLatestNonConflict(arr, i);
+        const includeProfit = arr[i].profit + (latest !== -1 ? dp[latest] : 0);
+
+        if (includeProfit === dp[i]) {
             result.push(arr[i]);
-            i = l;
+            i = latest;
         } else {
-            i = i - 1;
+            i -= 1;
         }
     }
 
     return { maxProfit: dp[n - 1], sequence: result.reverse() };
 }
 
-// ----------------------------------------------------
-// ALGORITHM 2: Top-Down DP (Memoization) - O(n^2)
-// ----------------------------------------------------
 function topDownDP(jobsArray) {
     if (jobsArray.length === 0) return { maxProfit: 0, sequence: [] };
-    
-    // Sort by end time
-    let arr = [...jobsArray].sort((a, b) => a.end - b.end);
-    let memo = new Map();
-    let choice = new Map(); 
+
+    const arr = [...jobsArray].sort((a, b) => a.end - b.end);
+    const memo = new Map();
+    const choice = new Map();
 
     function solve(i) {
         if (i < 0) return 0;
         if (i === 0) return arr[0].profit;
         if (memo.has(i)) return memo.get(i);
 
-        let l = -1;
-        // O(n) search -> total O(n^2)
-        for (let j = i - 1; j >= 0; j--) {
-            if (arr[j].end <= arr[i].start) {
-                l = j;
-                break;
-            }
-        }
+        const latest = findLatestNonConflict(arr, i);
+        const includeProfit = arr[i].profit + solve(latest);
+        const excludeProfit = solve(i - 1);
 
-        let inclProf = arr[i].profit + solve(l);
-        let exclProf = solve(i - 1);
-
-        if (inclProf > exclProf) {
-            memo.set(i, inclProf);
+        if (includeProfit > excludeProfit) {
+            memo.set(i, includeProfit);
             choice.set(i, true);
         } else {
-            memo.set(i, exclProf);
+            memo.set(i, excludeProfit);
             choice.set(i, false);
         }
 
         return memo.get(i);
     }
 
-    let maxProfit = solve(arr.length - 1);
+    const maxProfit = solve(arr.length - 1);
+    const result = [];
+    let current = arr.length - 1;
 
-    // Reconstruct sequence
-    let result = [];
-    let curr = arr.length - 1;
-    while (curr >= 0) {
-        if (curr === 0) {
+    while (current >= 0) {
+        if (current === 0) {
             result.push(arr[0]);
             break;
         }
-        if (choice.get(curr)) {
-            result.push(arr[curr]);
-            let l = -1;
-            for (let j = curr - 1; j >= 0; j--) {
-                if (arr[j].end <= arr[curr].start) {
-                    l = j;
-                    break;
-                }
-            }
-            curr = l;
+
+        if (choice.get(current)) {
+            result.push(arr[current]);
+            current = findLatestNonConflict(arr, current);
         } else {
-            curr = curr - 1;
+            current -= 1;
         }
     }
 
     return { maxProfit, sequence: result.reverse() };
 }
 
-// ----------------------------------------------------
-// Event Handlers
-// ----------------------------------------------------
+function findLatestNonConflict(arr, index) {
+    for (let j = index - 1; j >= 0; j--) {
+        if (arr[j].end <= arr[index].start) return j;
+    }
+    return -1;
+}
+
+function queueLiveOptimization() {
+    window.clearTimeout(liveTimer);
+    schedulerStatus.textContent = "Task change detected. Re-optimizing schedule...";
+
+    liveTimer = window.setTimeout(() => {
+        executeAndRender(bottomUpDP, "Live Scheduler - Bottom-Up DP");
+        schedulerStatus.textContent = "Optimal schedule updated automatically.";
+    }, 450);
+}
+
 function executeAndRender(algorithmFn, algoName) {
     if (jobs.length === 0) {
         alert("Please add at least one task.");
@@ -211,20 +223,24 @@ function executeAndRender(algorithmFn, algoName) {
     const t1 = performance.now();
     const timeTaken = (t1 - t0).toFixed(4);
 
-    // Update UI
-    document.getElementById('res-profit').innerText = `₹${result.maxProfit}`;
-    document.getElementById('res-time').innerText = `${timeTaken} ms`;
-    document.getElementById('res-algo-name').innerText = algoName;
-    
+    document.getElementById("res-profit").innerText = `₹${result.maxProfit}`;
+    document.getElementById("res-time").innerText = `${timeTaken} ms`;
+    document.getElementById("res-algo-name").innerText = algoName;
+    lastOptimized.textContent = new Date().toLocaleTimeString();
+
     renderJobs(result.sequence, optimalSchedule);
-    
-    resultsContainer.classList.remove('hidden');
+    resultsContainer.classList.remove("hidden");
 }
 
-btnBottomUp.addEventListener('click', () => {
+btnBottomUp.addEventListener("click", () => {
     executeAndRender(bottomUpDP, "Bottom-Up DP (Tabulation)");
+    schedulerStatus.textContent = "Manual bottom-up optimization completed.";
 });
 
-btnTopDown.addEventListener('click', () => {
+btnTopDown.addEventListener("click", () => {
     executeAndRender(topDownDP, "Top-Down DP (Memoization)");
+    schedulerStatus.textContent = "Manual top-down optimization completed.";
 });
+
+renderJobs(jobs, jobList);
+updateDependencyOptions();
