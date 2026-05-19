@@ -98,3 +98,39 @@
                     <div class="complexity-info">
                         <h4>Complexity Analysis</h4>
                         <p><strong>Algorithm:</strong> <span id="res-algo-name">-</span></p>
+                        <p><strong>Time Complexity:</strong> <span class="badge">O(n^2)</span></p>
+                        <p class="complexity-desc">
+                            Dynamic programming stores solved subproblems and avoids repeated recomputation.
+                            A naive include/exclude recursion can reach O(2^n), while this scheduler runs in O(n^2).
+                        </p>
+                    </div>
+                </div>
+
+                <div class="comparison-panel">
+                    <h3>Algorithm Comparison</h3>
+                    <div class="comparison-grid">
+                        <div class="comparison-card danger">
+                            <span class="comparison-title">Naive Recursion</span>
+                            <strong>O(2^n)</strong>
+                            <p>Repeated include/exclude calls recompute the same subproblems.</p>
+                        </div>
+                        <div class="comparison-card">
+                            <span class="comparison-title">Bottom-Up DP</span>
+                            <strong>O(n^2)</strong>
+                            <p>Builds answers iteratively using a DP table.</p>
+                        </div>
+                        <div class="comparison-card">
+                            <span class="comparison-title">Top-Down DP</span>
+                            <strong>O(n^2)</strong>
+                            <p>Uses memoization to reuse previously solved states.</p>
+                        </div>
+                    </div>
+                    <p class="comparison-note">DP improves the solution by avoiding recomputation and storing optimal subproblem results.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
